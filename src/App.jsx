@@ -12,7 +12,7 @@ import ContactForm from './components/ContactForm';
 import VideoDisplay from './components/VideoDisplay';
 import AdminPortal from './components/AdminPortal';
 
-// Main website page
+// Main website pageeee
 function HomePage() {
   return (
     <>
