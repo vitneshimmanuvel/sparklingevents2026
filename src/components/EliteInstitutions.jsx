@@ -4,6 +4,10 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
 gsap.registerPlugin(ScrollTrigger);
 
+const API_URL = import.meta.env.VITE_API_URL || '';
+
+const fallbackImages = ['/1.jpg', '/2.jpg', '/3.jpg', '/4.jpg', '/5.jpg', '/6.jpg', '/7.jpg', '/8.jpg'];
+
 const SpecializedComponent = () => {
   const containerRef = useRef(null);
   const contentRef = useRef(null);
@@ -12,32 +16,80 @@ const SpecializedComponent = () => {
   const subHeading2Ref = useRef(null);
   const institutionsRef = useRef([]);
   const trailContainerRef = useRef(null);
-  const lastPos = useRef({ x: 0, y: 0 });
   const throttleTimeout = useRef(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [images, setImages] = useState(fallbackImages);
+  const [institutions, setInstitutions] = useState([]);
 
-  const images = [
-    '/1.jpg',
-    '/2.jpg',
-    '/3.jpg',
-    '/4.jpg',
-    '/5.jpg',
-    '/6.jpg',
-    '/7.jpg',
-    '/8.jpg'
-  ];
+  // Fetch cursor popping images
+  useEffect(() => {
+    const fetchImages = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/slider-images`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.images && data.images.length > 0) {
+            setImages(data.images.map(img => img.image_url));
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch images for trail:', err);
+      }
+    };
+    fetchImages();
+  }, []);
 
-  const institutions = [
-    "VETINSTITUTION YUGA FEST",
-    "KSR INSTITUTION",
-    "NANDHA INSTITUTION",
-    "SRI SHANMUGA INSTITUTION",
-    "BUILDERS ENGINEERING COLLEGE",
-    "PAVENTHAR INSTITUTION",
-    "SRI VASAVI INSTITUTION"
-  ];
+  // Fetch Elite Institution names from database
+  useEffect(() => {
+    const fetchInstitutions = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/institutions`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.institutions && data.institutions.length > 0) {
+            setInstitutions(data.institutions.map(inst => inst.name));
+          } else {
+            // Fallback default list
+            setInstitutions([
+              "VETINSTITUTION YUGA FEST",
+              "KSR INSTITUTION",
+              "NANDHA INSTITUTION",
+              "SRI SHANMUGA INSTITUTION",
+              "BUILDERS ENGINEERING COLLEGE",
+              "PAVENTHAR INSTITUTION",
+              "SRI VASAVI INSTITUTION"
+            ]);
+          }
+        } else {
+          // Fallback default list
+          setInstitutions([
+            "VETINSTITUTION YUGA FEST",
+            "KSR INSTITUTION",
+            "NANDHA INSTITUTION",
+            "SRI SHANMUGA INSTITUTION",
+            "BUILDERS ENGINEERING COLLEGE",
+            "PAVENTHAR INSTITUTION",
+            "SRI VASAVI INSTITUTION"
+          ]);
+        }
+      } catch (err) {
+        console.error('Failed to fetch institutions:', err);
+        // Fallback default list
+        setInstitutions([
+          "VETINSTITUTION YUGA FEST",
+          "KSR INSTITUTION",
+          "NANDHA INSTITUTION",
+          "SRI SHANMUGA INSTITUTION",
+          "BUILDERS ENGINEERING COLLEGE",
+          "PAVENTHAR INSTITUTION",
+          "SRI VASAVI INSTITUTION"
+        ]);
+      }
+    };
+    fetchInstitutions();
+  }, []);
 
-  // Create golden blur elements
+  // Create golden blur background elements
   const goldenBlurs = Array.from({ length: 15 }).map((_, i) => ({
     id: i,
     size: Math.random() * 120 + 80,
@@ -56,14 +108,20 @@ const SpecializedComponent = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // GSAP Entrance Scroll Animations (Triggers after institutions list loaded)
   useEffect(() => {
+    if (institutions.length === 0) return;
+
     // Set initial positions
     gsap.set([headingRef.current, subHeading1Ref.current, subHeading2Ref.current], {
       opacity: 0,
       y: 30
     });
+    gsap.set(institutionsRef.current, {
+      opacity: 0,
+      y: 30
+    });
 
-    // Create timeline with ScrollTrigger
     const tl = gsap.timeline({
       scrollTrigger: {
         trigger: containerRef.current,
@@ -74,7 +132,6 @@ const SpecializedComponent = () => {
       }
     });
 
-    // Animate text elements with stagger
     tl.to(headingRef.current, {
       opacity: 1,
       y: 0,
@@ -94,19 +151,21 @@ const SpecializedComponent = () => {
       ease: "power2.out"
     }, 0.6);
 
-    // Animate institution items with modern entrance
     institutionsRef.current.forEach((el, i) => {
-      tl.to(el, {
-        opacity: 1,
-        y: 0,
-        duration: 0.6,
-        ease: "power3.out"
-      }, 0.8 + i * 0.15);
+      if (el) {
+        tl.to(el, {
+          opacity: 1,
+          y: 0,
+          duration: 0.6,
+          ease: "power3.out"
+        }, 0.8 + i * 0.15);
+      }
     });
 
     return () => ScrollTrigger.getAll().forEach(trigger => trigger.kill());
-  }, []);
+  }, [institutions.length]);
 
+  // Elegant cursor trail (Popping and fading out images)
   useEffect(() => {
     if (isMobile) return;
 
@@ -114,28 +173,32 @@ const SpecializedComponent = () => {
     if (!container) return;
 
     const createImageTrail = (x, y) => {
+      if (images.length === 0) return;
       const img = document.createElement('img');
       const randomImage = images[Math.floor(Math.random() * images.length)];
       img.src = randomImage;
       img.className = 'trail-image';
       img.style.left = `${x}px`;
       img.style.top = `${y}px`;
-      trailContainerRef.current.appendChild(img);
+      if (trailContainerRef.current) {
+        trailContainerRef.current.appendChild(img);
+      }
 
       gsap.fromTo(img,
         { opacity: 0, scale: 0, x: "-50%", y: "-50%" },
         {
           opacity: 1,
           scale: 1,
-          duration: 0.3,
+          duration: 0.35,
           ease: "back.out(1.7)",
           onComplete: () => {
             gsap.to(img, {
               opacity: 0,
-              scale: 0.5,
-              duration: 0.4,
+              scale: 0.4,
+              duration: 0.45,
+              delay: 0.15,
               onComplete: () => {
-                if (trailContainerRef.current.contains(img)) {
+                if (trailContainerRef.current && trailContainerRef.current.contains(img)) {
                   trailContainerRef.current.removeChild(img);
                 }
               }
@@ -148,12 +211,12 @@ const SpecializedComponent = () => {
       const rect = container.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
-      lastPos.current = { x, y };
+      
       if (!throttleTimeout.current) {
         createImageTrail(x, y);
         throttleTimeout.current = setTimeout(() => {
           throttleTimeout.current = null;
-        }, 100);
+        }, 80); // Spawn image every 80ms for nice trail density
       }
     };
 
@@ -162,7 +225,7 @@ const SpecializedComponent = () => {
       container.removeEventListener('mousemove', handleMouseMove);
       if (throttleTimeout.current) clearTimeout(throttleTimeout.current);
     };
-  }, [isMobile]);
+  }, [isMobile, images]);
 
   return (
     <div
@@ -175,9 +238,10 @@ const SpecializedComponent = () => {
         background: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%)',
         overflow: 'hidden',
         display: 'flex',
+        flexDirection: 'column',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: '2rem',
+        padding: '4rem 2rem',
         boxSizing: 'border-box',
         fontFamily: "'Inter', sans-serif"
       }}
@@ -262,57 +326,59 @@ const SpecializedComponent = () => {
           CELEBRITIES MANAGEMENT
         </h2>
 
-        <div style={{ marginTop: '3rem' }}>
-          <h3 style={{
-            fontSize: 'clamp(1.5rem, 2.5vw, 1.8rem)',
-            marginBottom: '1.5rem',
-            color: '#fff',
-            fontWeight: 500,
-            letterSpacing: '1px',
-            textTransform: 'uppercase',
-            opacity: 0.8
-          }}>
-            OUR ELITE INSTITUTIONS
-          </h3>
+        {institutions.length > 0 && (
+          <div style={{ marginTop: '3rem' }}>
+            <h3 style={{
+              fontSize: 'clamp(1.5rem, 2.5vw, 1.8rem)',
+              marginBottom: '1.5rem',
+              color: '#fff',
+              fontWeight: 500,
+              letterSpacing: '1px',
+              textTransform: 'uppercase',
+              opacity: 0.8
+            }}>
+              OUR ELITE INSTITUTIONS
+            </h3>
 
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            maxWidth: '700px',
-            margin: '0 auto',
-          }}>
-            {institutions.map((institution, index) => (
-              <div
-                key={index}
-                ref={el => institutionsRef.current[index] = el}
-                style={{
-                  position: 'relative',
-                  fontSize: 'clamp(1.1rem, 1.8vw, 1.3rem)',
-                  margin: '0.8rem 0',
-                  padding: '1.5rem 2rem',
-                  color: '#fff',
-                  fontWeight: 500,
-                  backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  opacity: 0,
-                  transform: 'translateY(30px)',
-                  zIndex: 4,
-                  overflow: 'hidden',
-                  backdropFilter: 'blur(4px)',
-                  border: '1px solid transparent',
-                  borderTop: '1px solid rgba(212, 175, 55, 0.5)',
-                  borderBottom: '1px solid rgba(212, 175, 55, 0.5)',
-                  textAlign: 'center'
-                }}
-                className="institution-item"
-              >
-                {institution}
-              </div>
-            ))}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              maxWidth: '700px',
+              margin: '0 auto',
+            }}>
+              {institutions.map((institution, index) => (
+                <div
+                  key={index}
+                  ref={el => institutionsRef.current[index] = el}
+                  style={{
+                    position: 'relative',
+                    fontSize: 'clamp(1.1rem, 1.8vw, 1.3rem)',
+                    margin: '0.8rem 0',
+                    padding: '1.5rem 2rem',
+                    color: '#fff',
+                    fontWeight: 500,
+                    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    opacity: 0,
+                    transform: 'translateY(30px)',
+                    zIndex: 4,
+                    overflow: 'hidden',
+                    backdropFilter: 'blur(4px)',
+                    border: '1px solid transparent',
+                    borderTop: '1px solid rgba(212, 175, 55, 0.5)',
+                    borderBottom: '1px solid rgba(212, 175, 55, 0.5)',
+                    textAlign: 'center'
+                  }}
+                  className="institution-item"
+                >
+                  {institution}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <style jsx global>{`
@@ -327,6 +393,8 @@ const SpecializedComponent = () => {
           pointer-events: none;
           z-index: 10000;
           border: 2px solid #D4AF37;
+          border-radius: 8px;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
           filter: brightness(1.1) saturate(1.2);
         }
         
@@ -344,7 +412,7 @@ const SpecializedComponent = () => {
 
         @media (max-width: 768px) {
           .specialized-container {
-            padding: 1.5rem !important;
+            padding: 3rem 1.5rem !important;
           }
           
           .trail-image {
@@ -359,7 +427,7 @@ const SpecializedComponent = () => {
 
         @media (max-width: 480px) {
           .specialized-container {
-            padding: 1rem !important;
+            padding: 2rem 1rem !important;
           }
           
           .institution-item {

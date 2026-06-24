@@ -1,8 +1,10 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import ScrollTrigger from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
+
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 const Secthree = () => {
   const sectionRef = useRef(null);
@@ -10,6 +12,42 @@ const Secthree = () => {
   const holdstwoRef = useRef(null);
   const holdsthreeRef = useRef(null);
   const textRef = useRef(null);
+
+  const [columnImages, setColumnImages] = useState({
+    1: ['/1.jpg', '/2.jpg', '/3.jpg'],
+    2: ['/4.jpg', '/5.jpg', '/6.jpg'],
+    3: ['/7.jpg', '/8.jpg', '/1.jpg']
+  });
+
+  useEffect(() => {
+    const fetchImages = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/grid-images`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.images && data.images.length > 0) {
+            const grouped = { 1: [], 2: [], 3: [] };
+            data.images.forEach(img => {
+              const col = img.col_index || 1;
+              if (grouped[col]) {
+                grouped[col].push(img.image_url);
+              }
+            });
+            
+            // Populate fallback values for any empty columns
+            if (grouped[1].length === 0) grouped[1] = ['/1.jpg', '/2.jpg', '/3.jpg'];
+            if (grouped[2].length === 0) grouped[2] = ['/4.jpg', '/5.jpg', '/6.jpg'];
+            if (grouped[3].length === 0) grouped[3] = ['/7.jpg', '/8.jpg', '/1.jpg'];
+            
+            setColumnImages(grouped);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch images for grid:', err);
+      }
+    };
+    fetchImages();
+  }, []);
 
   useEffect(() => {
     // Expand section from height 0 to 100dvh
@@ -80,45 +118,40 @@ const Secthree = () => {
       }
     );
   }, []);
-  
+
+  // Distribute images across 3 columns, filling with repeats if needed
+  const getColumnImages = (columnIndex) => {
+    const colKey = columnIndex + 1; // 1-indexed (1, 2, 3)
+    const list = columnImages[colKey] || [];
+    if (list.length === 0) return [];
+    
+    // Support showing all uploaded images (up to 7 or more).
+    // If the list is too short (e.g. less than 6), repeat it to ensure there are enough images
+    // for a smooth vertical GSAP scroll animation without revealing empty space.
+    let result = [...list];
+    while (result.length < 6) {
+      result = [...result, ...list];
+    }
+    return result;
+  };
+
   return (
     <div className="sectionthree" ref={sectionRef}>
       <h2 ref={textRef} className="center-text">Make your moment</h2>
       <div className="holdsone hold" ref={holdsoneRef}>
-        <img src="1.jpg" alt="" />
-        <img src="2.jpg" alt="" />
-        <img src="8.jpg" alt="" />
-        <img src="4.jpg" alt="" />
-        <img src="5.jpg" alt="" />
-        <img src="6.jpg" alt="" />
-          <img src="1.jpg" alt="" />
-        <img src="5.jpg" alt="" />
-        <img src="7.jpg" alt="" />
-        <img src="8.jpg" alt="" />
+        {getColumnImages(0).map((src, i) => (
+          <img key={`col1-${i}`} src={src} alt="" />
+        ))}
       </div>
       <div className="holdstwo hold" ref={holdstwoRef}>
-        <img src="2.jpg" alt="" />
-        <img src="3.jpg" alt="" />
-          <img src="1.jpg" alt="" />
-        <img src="5.jpg" alt="" />
-        <img src="7.jpg" alt="" />
-        <img src="8.jpg" alt="" />
-        <img src="1.jpg" alt="" />
-        <img src="5.jpg" alt="" />
-        <img src="7.jpg" alt="" />
-        <img src="8.jpg" alt="" />
+        {getColumnImages(1).map((src, i) => (
+          <img key={`col2-${i}`} src={src} alt="" />
+        ))}
       </div>
       <div className="holdsthree hold" ref={holdsthreeRef}>
-        <img src="7.jpg" alt="" />
-        <img src="8.jpg" alt="" />
-        <img src="2.jpg" alt="" />
-        <img src="5.jpg" alt="" />
-          <img src="1.jpg" alt="" />
-        <img src="5.jpg" alt="" />
-        <img src="7.jpg" alt="" />
-        <img src="8.jpg" alt="" />
-        <img src="3.jpg" alt="" />
-        <img src="4.jpg" alt="" />
+        {getColumnImages(2).map((src, i) => (
+          <img key={`col3-${i}`} src={src} alt="" />
+        ))}
       </div>
     </div>
   );

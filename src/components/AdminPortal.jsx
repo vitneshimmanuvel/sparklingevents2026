@@ -14,12 +14,15 @@ const AdminLogin = ({ onLogin }) => {
   const formRef = useRef(null);
 
   useEffect(() => {
-    gsap.from(formRef.current, {
-      opacity: 0,
-      y: 30,
-      duration: 0.8,
-      ease: 'back.out(1.2)',
-    });
+    gsap.fromTo(formRef.current, 
+      { opacity: 0, y: 30 },
+      {
+        opacity: 1,
+        y: 0,
+        duration: 0.8,
+        ease: 'back.out(1.2)',
+      }
+    );
   }, []);
 
   const handleSubmit = async (e) => {
@@ -127,6 +130,50 @@ const AdminDashboard = ({ token, onLogout }) => {
   const [savingService, setSavingService] = useState(false);
   const [serviceProgress, setServiceProgress] = useState('');
 
+  // Slider Images state
+  const [sliderImages, setSliderImages] = useState([]);
+  const [loadingSliderImages, setLoadingSliderImages] = useState(true);
+  const [editingSliderImage, setEditingSliderImage] = useState(null);
+  const [sliderTitle, setSliderTitle] = useState('');
+  const [sliderOrder, setSliderOrder] = useState('');
+  const [sliderActive, setSliderActive] = useState(true);
+  const [sliderFile, setSliderFile] = useState(null);
+  const [savingSlider, setSavingSlider] = useState(false);
+  const [sliderProgress, setSliderProgress] = useState('');
+
+  // Testimonials state
+  const [testimonials, setTestimonials] = useState([]);
+  const [loadingTestimonials, setLoadingTestimonials] = useState(true);
+  const [editingTestimonial, setEditingTestimonial] = useState(null);
+  const [testimonialName, setTestimonialName] = useState('');
+  const [testimonialDesignation, setTestimonialDesignation] = useState('');
+  const [testimonialMessage, setTestimonialMessage] = useState('');
+  const [testimonialRating, setTestimonialRating] = useState('5');
+  const [testimonialVisible, setTestimonialVisible] = useState(true);
+  const [testimonialFile, setTestimonialFile] = useState(null);
+  const [removeTestimonialImage, setRemoveTestimonialImage] = useState(false);
+  const [savingTestimonial, setSavingTestimonial] = useState(false);
+  const [testimonialProgress, setTestimonialProgress] = useState('');
+
+  // Grid Images (3D animated grid columns) state
+  const [gridImages, setGridImages] = useState([]);
+  const [loadingGridImages, setLoadingGridImages] = useState(true);
+  const [editingGridImage, setEditingGridImage] = useState(null);
+  const [gridColIndex, setGridColIndex] = useState('1'); // '1', '2', or '3'
+  const [gridOrder, setGridOrder] = useState('');
+  const [gridFile, setGridFile] = useState(null);
+  const [savingGrid, setSavingGrid] = useState(false);
+  const [gridProgress, setGridProgress] = useState('');
+
+  // Elite Institutions state
+  const [adminInstitutions, setAdminInstitutions] = useState([]);
+  const [loadingInstitutions, setLoadingInstitutions] = useState(true);
+  const [editingInstitution, setEditingInstitution] = useState(null);
+  const [institutionName, setInstitutionName] = useState('');
+  const [institutionOrder, setInstitutionOrder] = useState('');
+  const [savingInstitution, setSavingInstitution] = useState(false);
+  const [institutionProgress, setInstitutionProgress] = useState('');
+
   const headers = {
     Authorization: `Bearer ${token}`,
   };
@@ -136,6 +183,10 @@ const AdminDashboard = ({ token, onLogout }) => {
     fetchVideos();
     fetchAdminServices();
     fetchSettings();
+    fetchSliderImages();
+    fetchTestimonials();
+    fetchGridImages();
+    fetchAdminInstitutions();
   }, []);
 
   const fetchLeads = async () => {
@@ -361,6 +412,350 @@ const AdminDashboard = ({ token, onLogout }) => {
     setServiceProgress('');
   };
 
+  // ========================
+  // SLIDER IMAGES HANDLERS
+  // ========================
+  const fetchSliderImages = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/slider-images`, { headers });
+      const data = await res.json();
+      if (res.ok) setSliderImages(data.images);
+    } catch (err) {
+      console.error('Error fetching slider images:', err);
+    } finally {
+      setLoadingSliderImages(false);
+    }
+  };
+
+  const handleSliderSave = async (e) => {
+    e.preventDefault();
+    if (!editingSliderImage && !sliderFile) return;
+
+    setSavingSlider(true);
+    setSliderProgress(editingSliderImage ? 'Updating image...' : 'Uploading image...');
+
+    const formData = new FormData();
+    formData.append('title', sliderTitle);
+    formData.append('display_order', sliderOrder || '0');
+    formData.append('is_active', String(sliderActive));
+    if (sliderFile) formData.append('image', sliderFile);
+
+    const url = editingSliderImage
+      ? `${API_URL}/api/admin/slider-images/${editingSliderImage.id}`
+      : `${API_URL}/api/admin/slider-images`;
+    const method = editingSliderImage ? 'PUT' : 'POST';
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSliderProgress(editingSliderImage ? '✓ Image updated!' : '✓ Image uploaded!');
+        resetSliderForm();
+        fetchSliderImages();
+        setTimeout(() => setSliderProgress(''), 3000);
+        setActiveTab('sliderImages');
+      } else {
+        setSliderProgress(`Error: ${data.error || 'Failed to save'}`);
+      }
+    } catch (err) {
+      setSliderProgress('Save failed. Check your connection.');
+    } finally {
+      setSavingSlider(false);
+    }
+  };
+
+  const deleteSliderImage = async (id) => {
+    if (!window.confirm('Delete this image?')) return;
+    try {
+      await fetch(`${API_URL}/api/admin/slider-images/${id}`, { method: 'DELETE', headers });
+      setSliderImages((prev) => prev.filter((img) => img.id !== id));
+    } catch (err) {
+      console.error('Error deleting slider image:', err);
+    }
+  };
+
+  const startEditSliderImage = (img) => {
+    setEditingSliderImage(img);
+    setSliderTitle(img.title || '');
+    setSliderOrder(String(img.display_order || ''));
+    setSliderActive(img.is_active);
+    setSliderFile(null);
+    setSliderProgress('');
+    setActiveTab('sliderForm');
+  };
+
+  const resetSliderForm = () => {
+    setEditingSliderImage(null);
+    setSliderTitle('');
+    setSliderOrder('');
+    setSliderActive(true);
+    setSliderFile(null);
+    setSliderProgress('');
+  };
+
+  // ========================
+  // TESTIMONIALS HANDLERS
+  // ========================
+  const fetchTestimonials = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/testimonials`, { headers });
+      const data = await res.json();
+      if (res.ok) setTestimonials(data.testimonials);
+    } catch (err) {
+      console.error('Error fetching testimonials:', err);
+    } finally {
+      setLoadingTestimonials(false);
+    }
+  };
+
+  const handleTestimonialSave = async (e) => {
+    e.preventDefault();
+    if (!testimonialName || !testimonialMessage) return;
+
+    setSavingTestimonial(true);
+    setTestimonialProgress(editingTestimonial ? 'Updating testimonial...' : 'Creating testimonial...');
+
+    const formData = new FormData();
+    formData.append('client_name', testimonialName);
+    formData.append('designation', testimonialDesignation);
+    formData.append('message', testimonialMessage);
+    formData.append('rating', testimonialRating);
+    formData.append('is_visible', String(testimonialVisible));
+    if (testimonialFile) formData.append('image', testimonialFile);
+    if (editingTestimonial && removeTestimonialImage) formData.append('remove_image', 'true');
+
+    const url = editingTestimonial
+      ? `${API_URL}/api/admin/testimonials/${editingTestimonial.id}`
+      : `${API_URL}/api/admin/testimonials`;
+    const method = editingTestimonial ? 'PUT' : 'POST';
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTestimonialProgress(editingTestimonial ? '✓ Testimonial updated!' : '✓ Testimonial created!');
+        resetTestimonialForm();
+        fetchTestimonials();
+        setTimeout(() => setTestimonialProgress(''), 3000);
+        setActiveTab('testimonials');
+      } else {
+        setTestimonialProgress(`Error: ${data.error || 'Failed to save'}`);
+      }
+    } catch (err) {
+      setTestimonialProgress('Save failed. Check your connection.');
+    } finally {
+      setSavingTestimonial(false);
+    }
+  };
+
+  const deleteTestimonial = async (id) => {
+    if (!window.confirm('Delete this testimonial?')) return;
+    try {
+      await fetch(`${API_URL}/api/admin/testimonials/${id}`, { method: 'DELETE', headers });
+      setTestimonials((prev) => prev.filter((t) => t.id !== id));
+    } catch (err) {
+      console.error('Error deleting testimonial:', err);
+    }
+  };
+
+  const startEditTestimonial = (t) => {
+    setEditingTestimonial(t);
+    setTestimonialName(t.client_name);
+    setTestimonialDesignation(t.designation || '');
+    setTestimonialMessage(t.message);
+    setTestimonialRating(String(t.rating || 5));
+    setTestimonialVisible(t.is_visible);
+    setTestimonialFile(null);
+    setRemoveTestimonialImage(false);
+    setTestimonialProgress('');
+    setActiveTab('testimonialForm');
+  };
+
+  const resetTestimonialForm = () => {
+    setEditingTestimonial(null);
+    setTestimonialName('');
+    setTestimonialDesignation('');
+    setTestimonialMessage('');
+    setTestimonialRating('5');
+    setTestimonialVisible(true);
+    setTestimonialFile(null);
+    setRemoveTestimonialImage(false);
+    setTestimonialProgress('');
+  };
+
+  // ========================
+  // GRID IMAGES HANDLERS
+  // ========================
+  const fetchGridImages = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/grid-images`, { headers });
+      const data = await res.json();
+      if (res.ok) setGridImages(data.images);
+    } catch (err) {
+      console.error('Error fetching grid images:', err);
+    } finally {
+      setLoadingGridImages(false);
+    }
+  };
+
+  const handleGridSave = async (e) => {
+    e.preventDefault();
+    if (!editingGridImage && !gridFile) return;
+
+    setSavingGrid(true);
+    setGridProgress(editingGridImage ? 'Updating image...' : 'Uploading image...');
+
+    const formData = new FormData();
+    formData.append('col_index', gridColIndex);
+    formData.append('display_order', gridOrder || '0');
+    if (gridFile) formData.append('image', gridFile);
+
+    const url = editingGridImage
+      ? `${API_URL}/api/admin/grid-images/${editingGridImage.id}`
+      : `${API_URL}/api/admin/grid-images`;
+    const method = editingGridImage ? 'PUT' : 'POST';
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setGridProgress(editingGridImage ? '✓ Image updated!' : '✓ Image uploaded!');
+        resetGridForm();
+        fetchGridImages();
+        setTimeout(() => setGridProgress(''), 3000);
+        setActiveTab('gridImages');
+      } else {
+        setGridProgress(`Error: ${data.error || 'Failed to save'}`);
+      }
+    } catch (err) {
+      setGridProgress('Save failed. Check your connection.');
+    } finally {
+      setSavingGrid(false);
+    }
+  };
+
+  const deleteGridImage = async (id) => {
+    if (!window.confirm('Delete this grid image?')) return;
+    try {
+      await fetch(`${API_URL}/api/admin/grid-images/${id}`, { method: 'DELETE', headers });
+      setGridImages((prev) => prev.filter((img) => img.id !== id));
+    } catch (err) {
+      console.error('Error deleting grid image:', err);
+    }
+  };
+
+  const startEditGridImage = (img) => {
+    setEditingGridImage(img);
+    setGridColIndex(String(img.col_index || '1'));
+    setGridOrder(String(img.display_order || ''));
+    setGridFile(null);
+    setGridProgress('');
+    setActiveTab('gridImageForm');
+  };
+
+  const resetGridForm = () => {
+    setEditingGridImage(null);
+    setGridColIndex('1');
+    setGridOrder('');
+    setGridFile(null);
+    setGridProgress('');
+  };
+
+  // ========================
+  // INSTITUTIONS HANDLERS
+  // ========================
+  const fetchAdminInstitutions = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/institutions`, { headers });
+      const data = await res.json();
+      if (res.ok) setAdminInstitutions(data.institutions);
+    } catch (err) {
+      console.error('Error fetching institutions:', err);
+    } finally {
+      setLoadingInstitutions(false);
+    }
+  };
+
+  const handleInstitutionSave = async (e) => {
+    e.preventDefault();
+    if (!institutionName) return;
+
+    setSavingInstitution(true);
+    setInstitutionProgress(editingInstitution ? 'Updating institution...' : 'Adding institution...');
+
+    const payload = {
+      name: institutionName,
+      display_order: institutionOrder || '0'
+    };
+
+    const url = editingInstitution
+      ? `${API_URL}/api/admin/institutions/${editingInstitution.id}`
+      : `${API_URL}/api/admin/institutions`;
+    const method = editingInstitution ? 'PUT' : 'POST';
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { 
+          ...headers,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setInstitutionProgress(editingInstitution ? '✓ Updated!' : '✓ Added!');
+        resetInstitutionForm();
+        fetchAdminInstitutions();
+        setTimeout(() => setInstitutionProgress(''), 3000);
+        setActiveTab('institutions');
+      } else {
+        setInstitutionProgress(`Error: ${data.error || 'Failed to save'}`);
+      }
+    } catch (err) {
+      setInstitutionProgress('Save failed. Check your connection.');
+    } finally {
+      setSavingInstitution(false);
+    }
+  };
+
+  const deleteInstitution = async (id) => {
+    if (!window.confirm('Delete this institution?')) return;
+    try {
+      await fetch(`${API_URL}/api/admin/institutions/${id}`, { method: 'DELETE', headers });
+      setAdminInstitutions((prev) => prev.filter((inst) => inst.id !== id));
+    } catch (err) {
+      console.error('Error deleting institution:', err);
+    }
+  };
+
+  const startEditInstitution = (inst) => {
+    setEditingInstitution(inst);
+    setInstitutionName(inst.name || '');
+    setInstitutionOrder(String(inst.display_order || ''));
+    setInstitutionProgress('');
+    setActiveTab('institutionForm');
+  };
+
+  const resetInstitutionForm = () => {
+    setEditingInstitution(null);
+    setInstitutionName('');
+    setInstitutionOrder('');
+    setInstitutionProgress('');
+  };
+
   return (
     <div style={styles.dashboard}>
       {/* Sidebar */}
@@ -406,6 +801,42 @@ const AdminDashboard = ({ token, onLogout }) => {
             }}
           >
             ⬆ Upload Video
+          </button>
+          <button
+            onClick={() => setActiveTab('sliderImages')}
+            style={{
+              ...styles.navBtn,
+              ...(activeTab === 'sliderImages' || activeTab === 'sliderForm' ? styles.navBtnActive : {}),
+            }}
+          >
+            🖼️ Gallery Images ({sliderImages.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('testimonials')}
+            style={{
+              ...styles.navBtn,
+              ...(activeTab === 'testimonials' || activeTab === 'testimonialForm' ? styles.navBtnActive : {}),
+            }}
+          >
+            💬 Testimonials ({testimonials.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('gridImages')}
+            style={{
+              ...styles.navBtn,
+              ...(activeTab === 'gridImages' || activeTab === 'gridImageForm' ? styles.navBtnActive : {}),
+            }}
+          >
+            🧩 Grid Images ({gridImages.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('institutions')}
+            style={{
+              ...styles.navBtn,
+              ...(activeTab === 'institutions' || activeTab === 'institutionForm' ? styles.navBtnActive : {}),
+            }}
+          >
+            🏫 Elite Institutions ({adminInstitutions.length})
           </button>
         </nav>
 
@@ -873,6 +1304,823 @@ const AdminDashboard = ({ token, onLogout }) => {
             </form>
           </div>
         )}
+
+        {/* SLIDER IMAGES TAB */}
+        {activeTab === 'sliderImages' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h2 style={styles.tabTitle}>Gallery Images</h2>
+                <p style={styles.tabSubtitle}>
+                  Manage images used in slideshow, grid section, and cursor trail across the website
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  resetSliderForm();
+                  setActiveTab('sliderForm');
+                }}
+                style={styles.addServiceBtn}
+              >
+                ＋ Add New Image
+              </button>
+            </div>
+
+            {loadingSliderImages ? (
+              <p style={styles.loadingText}>Loading images...</p>
+            ) : sliderImages.length === 0 ? (
+              <div style={styles.emptyState}>
+                <p>No gallery images yet. Click 'Add New Image' to upload one.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1.5rem' }}>
+                {sliderImages.map((img) => (
+                  <div key={img.id} style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(212,175,55,0.15)',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    position: 'relative',
+                  }}>
+                    <img
+                      src={img.image_url}
+                      alt={img.title || 'Gallery image'}
+                      style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block' }}
+                    />
+                    <div style={{ padding: '0.8rem' }}>
+                      <h4 style={{ color: '#f9e076', fontSize: '0.9rem', fontWeight: 600, margin: '0 0 4px 0' }}>
+                        {img.title || 'Untitled'}
+                      </h4>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
+                        <span style={{
+                          fontSize: '0.75rem',
+                          color: img.is_active ? '#2ecc71' : '#ff4444',
+                          fontWeight: 600,
+                        }}>
+                          {img.is_active ? 'Active' : 'Hidden'} • Order: {img.display_order}
+                        </span>
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          <button
+                            onClick={() => startEditSliderImage(img)}
+                            style={{
+                              ...styles.deleteBtn,
+                              background: 'rgba(212,175,55,0.1)',
+                              borderColor: 'rgba(212,175,55,0.3)',
+                              color: '#ffd700',
+                              fontSize: '0.75rem',
+                              padding: '0.3rem 0.6rem',
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deleteSliderImage(img.id)}
+                            style={{ ...styles.deleteBtn, fontSize: '0.75rem', padding: '0.3rem 0.6rem' }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SLIDER IMAGE FORM (ADD/EDIT) */}
+        {activeTab === 'sliderForm' && (
+          <div>
+            <h2 style={styles.tabTitle}>{editingSliderImage ? 'Edit Image' : 'Add New Image'}</h2>
+            <p style={styles.tabSubtitle}>
+              {editingSliderImage ? 'Update this gallery image.' : 'Upload a new image to the gallery.'}
+            </p>
+
+            <form onSubmit={handleSliderSave} style={styles.uploadForm}>
+              <div style={styles.uploadField}>
+                <label style={styles.uploadLabel}>Image Title</label>
+                <input
+                  type="text"
+                  value={sliderTitle}
+                  onChange={(e) => setSliderTitle(e.target.value)}
+                  placeholder="e.g., Wedding Event 2026"
+                  style={styles.uploadInput}
+                />
+              </div>
+
+              <div style={styles.uploadField}>
+                <label style={styles.uploadLabel}>Display Order</label>
+                <input
+                  type="number"
+                  value={sliderOrder}
+                  onChange={(e) => setSliderOrder(e.target.value)}
+                  placeholder="0"
+                  style={styles.uploadInput}
+                />
+              </div>
+
+              <div style={styles.uploadField}>
+                <label style={styles.uploadLabel}>Status</label>
+                <select
+                  value={String(sliderActive)}
+                  onChange={(e) => setSliderActive(e.target.value === 'true')}
+                  style={styles.uploadInput}
+                >
+                  <option value="true">Active (Visible)</option>
+                  <option value="false">Hidden</option>
+                </select>
+              </div>
+
+              {editingSliderImage && (
+                <div style={{ marginBottom: '1.2rem', background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(212,175,55,0.15)' }}>
+                  <span style={{ fontSize: '0.85rem', color: '#b8a265', display: 'block', marginBottom: '0.5rem' }}>Current Image:</span>
+                  <img src={editingSliderImage.image_url} alt="Current" style={{ width: '200px', borderRadius: '8px', objectFit: 'cover' }} />
+                </div>
+              )}
+
+              <div style={styles.uploadField}>
+                <label style={styles.uploadLabel}>
+                  {editingSliderImage ? 'Replace Image' : 'Image File *'}
+                </label>
+                <div style={styles.fileDropZone}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setSliderFile(e.target.files[0])}
+                    style={styles.fileInput}
+                    id="slider-image-input"
+                    required={!editingSliderImage}
+                  />
+                  <label htmlFor="slider-image-input" style={styles.fileLabel}>
+                    {sliderFile ? (
+                      <>
+                        <span style={{ color: '#d4af37' }}>✓ {sliderFile.name}</span>
+                        <br />
+                        <span style={{ fontSize: '0.85rem', opacity: 0.7 }}>
+                          {(sliderFile.size / (1024 * 1024)).toFixed(2)} MB
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: '2rem' }}>🖼️</span>
+                        <br />
+                        Click to select an image
+                        <br />
+                        <span style={{ fontSize: '0.85rem', opacity: 0.6 }}>
+                          Max 10MB • JPG, PNG, WebP
+                        </span>
+                      </>
+                    )}
+                  </label>
+                </div>
+              </div>
+
+              {sliderProgress && (
+                <p style={{
+                  ...styles.uploadStatus,
+                  color: sliderProgress.startsWith('Error') ? '#ff4444' : '#d4af37',
+                }}>
+                  {sliderProgress}
+                </p>
+              )}
+
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+                <button
+                  type="submit"
+                  disabled={savingSlider}
+                  style={{
+                    ...styles.uploadBtn,
+                    flex: 2,
+                    opacity: savingSlider ? 0.6 : 1,
+                  }}
+                >
+                  {savingSlider ? '⏳ Saving...' : editingSliderImage ? 'Update Image' : 'Upload Image'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetSliderForm();
+                    setActiveTab('sliderImages');
+                  }}
+                  style={{
+                    ...styles.logoutBtn,
+                    flex: 1,
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(212,175,55,0.2)',
+                    color: '#d4c7a2',
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* TESTIMONIALS TAB */}
+        {activeTab === 'testimonials' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h2 style={styles.tabTitle}>Testimonials</h2>
+                <p style={styles.tabSubtitle}>
+                  Manage client testimonials displayed on the website
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  resetTestimonialForm();
+                  setActiveTab('testimonialForm');
+                }}
+                style={styles.addServiceBtn}
+              >
+                ＋ Add Testimonial
+              </button>
+            </div>
+
+            {loadingTestimonials ? (
+              <p style={styles.loadingText}>Loading testimonials...</p>
+            ) : testimonials.length === 0 ? (
+              <div style={styles.emptyState}>
+                <p>No testimonials yet. Click 'Add Testimonial' to create one.</p>
+              </div>
+            ) : (
+              <div style={styles.tableWrapper}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr>
+                      <th style={styles.th}>Client</th>
+                      <th style={styles.th}>Message</th>
+                      <th style={styles.th}>Rating</th>
+                      <th style={styles.th}>Photo</th>
+                      <th style={styles.th}>Visible</th>
+                      <th style={styles.th}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {testimonials.map((t) => (
+                      <tr key={t.id} style={styles.tr}>
+                        <td style={{ ...styles.td, fontWeight: 'bold', color: '#f9e076' }}>
+                          {t.client_name}
+                          {t.designation && <br />}
+                          {t.designation && <span style={{ fontWeight: 400, fontSize: '0.8rem', color: '#8a7a4f' }}>{t.designation}</span>}
+                        </td>
+                        <td style={{ ...styles.td, maxWidth: '300px', fontSize: '0.85rem' }}>
+                          {t.message.length > 100 ? t.message.slice(0, 100) + '...' : t.message}
+                        </td>
+                        <td style={styles.td}>
+                          <span style={{ color: '#ffd700' }}>{'★'.repeat(t.rating || 5)}</span>
+                        </td>
+                        <td style={styles.td}>
+                          {t.image_url ? (
+                            <img src={t.image_url} alt={t.client_name} style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }} />
+                          ) : (
+                            <span style={{ opacity: 0.5, fontSize: '0.85rem' }}>None</span>
+                          )}
+                        </td>
+                        <td style={styles.td}>
+                          <span style={{
+                            color: t.is_visible ? '#2ecc71' : '#ff4444',
+                            fontSize: '0.85rem',
+                            fontWeight: 600,
+                          }}>
+                            {t.is_visible ? 'Visible' : 'Hidden'}
+                          </span>
+                        </td>
+                        <td style={{ ...styles.td, display: 'flex', gap: '0.5rem' }}>
+                          <button
+                            onClick={() => startEditTestimonial(t)}
+                            style={{
+                              ...styles.deleteBtn,
+                              background: 'rgba(212,175,55,0.1)',
+                              borderColor: 'rgba(212,175,55,0.3)',
+                              color: '#ffd700',
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deleteTestimonial(t.id)}
+                            style={styles.deleteBtn}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TESTIMONIAL FORM (ADD/EDIT) */}
+        {activeTab === 'testimonialForm' && (
+          <div>
+            <h2 style={styles.tabTitle}>{editingTestimonial ? 'Edit Testimonial' : 'Add Testimonial'}</h2>
+            <p style={styles.tabSubtitle}>
+              {editingTestimonial ? 'Update this client testimonial.' : 'Create a new client testimonial.'}
+            </p>
+
+            <form onSubmit={handleTestimonialSave} style={styles.uploadForm}>
+              <div style={styles.uploadField}>
+                <label style={styles.uploadLabel}>Client Name *</label>
+                <input
+                  type="text"
+                  value={testimonialName}
+                  onChange={(e) => setTestimonialName(e.target.value)}
+                  required
+                  placeholder="e.g., Rajesh Kumar"
+                  style={styles.uploadInput}
+                />
+              </div>
+
+              <div style={styles.uploadField}>
+                <label style={styles.uploadLabel}>Designation / Role</label>
+                <input
+                  type="text"
+                  value={testimonialDesignation}
+                  onChange={(e) => setTestimonialDesignation(e.target.value)}
+                  placeholder="e.g., Wedding Client"
+                  style={styles.uploadInput}
+                />
+              </div>
+
+              <div style={styles.uploadField}>
+                <label style={styles.uploadLabel}>Testimonial Message *</label>
+                <textarea
+                  value={testimonialMessage}
+                  onChange={(e) => setTestimonialMessage(e.target.value)}
+                  required
+                  rows={4}
+                  placeholder="What did the client say about your service?"
+                  style={{ ...styles.uploadInput, fontFamily: 'inherit', resize: 'vertical' }}
+                />
+              </div>
+
+              <div style={styles.uploadField}>
+                <label style={styles.uploadLabel}>Rating (1-5 Stars)</label>
+                <select
+                  value={testimonialRating}
+                  onChange={(e) => setTestimonialRating(e.target.value)}
+                  style={styles.uploadInput}
+                >
+                  <option value="5">★★★★★ (5 Stars)</option>
+                  <option value="4">★★★★ (4 Stars)</option>
+                  <option value="3">★★★ (3 Stars)</option>
+                  <option value="2">★★ (2 Stars)</option>
+                  <option value="1">★ (1 Star)</option>
+                </select>
+              </div>
+
+              <div style={styles.uploadField}>
+                <label style={styles.uploadLabel}>Visibility</label>
+                <select
+                  value={String(testimonialVisible)}
+                  onChange={(e) => setTestimonialVisible(e.target.value === 'true')}
+                  style={styles.uploadInput}
+                >
+                  <option value="true">Visible on Website</option>
+                  <option value="false">Hidden from Website</option>
+                </select>
+              </div>
+
+              {/* Client photo */}
+              <div style={styles.uploadField}>
+                <label style={styles.uploadLabel}>
+                  {editingTestimonial?.image_url ? 'Replace Client Photo' : 'Client Photo (Optional)'}
+                </label>
+
+                {editingTestimonial?.image_url && (
+                  <div style={{ marginBottom: '1.2rem', display: 'flex', alignItems: 'center', gap: '1.5rem', background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(212,175,55,0.15)' }}>
+                    <img src={editingTestimonial.image_url} alt="Client" style={{ width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover' }} />
+                    <div>
+                      <span style={{ fontSize: '0.85rem', color: '#b8a265', display: 'block' }}>Current Photo</span>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem', cursor: 'pointer', color: '#ff6666' }}>
+                        <input
+                          type="checkbox"
+                          checked={removeTestimonialImage}
+                          onChange={(e) => setRemoveTestimonialImage(e.target.checked)}
+                        />
+                        <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Remove Photo</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                <div style={styles.fileDropZone}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setTestimonialFile(e.target.files[0])}
+                    style={styles.fileInput}
+                    id="testimonial-image-input"
+                  />
+                  <label htmlFor="testimonial-image-input" style={styles.fileLabel}>
+                    {testimonialFile ? (
+                      <>
+                        <span style={{ color: '#d4af37' }}>✓ {testimonialFile.name}</span>
+                        <br />
+                        <span style={{ fontSize: '0.85rem', opacity: 0.7 }}>
+                          {(testimonialFile.size / (1024 * 1024)).toFixed(2)} MB
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: '1.5rem' }}>📷</span>
+                        <br />
+                        Click to select a photo
+                      </>
+                    )}
+                  </label>
+                </div>
+              </div>
+
+              {testimonialProgress && (
+                <p style={{
+                  ...styles.uploadStatus,
+                  color: testimonialProgress.startsWith('Error') ? '#ff4444' : '#d4af37',
+                }}>
+                  {testimonialProgress}
+                </p>
+              )}
+
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+                <button
+                  type="submit"
+                  disabled={savingTestimonial}
+                  style={{
+                    ...styles.uploadBtn,
+                    flex: 2,
+                    opacity: savingTestimonial ? 0.6 : 1,
+                  }}
+                >
+                  {savingTestimonial ? '⏳ Saving...' : editingTestimonial ? 'Update Testimonial' : 'Create Testimonial'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetTestimonialForm();
+                    setActiveTab('testimonials');
+                  }}
+                  style={{
+                    ...styles.logoutBtn,
+                    flex: 1,
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(212,175,55,0.2)',
+                    color: '#d4c7a2',
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* GRID IMAGES TAB */}
+        {activeTab === 'gridImages' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h2 style={styles.tabTitle}>3D Grid Images</h2>
+                <p style={styles.tabSubtitle}>
+                  Manage images specifically used in the 3-column animated grid section.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  resetGridForm();
+                  setActiveTab('gridImageForm');
+                }}
+                style={styles.addServiceBtn}
+              >
+                ✚ Add Grid Image
+              </button>
+            </div>
+
+            {loadingGridImages ? (
+              <p style={styles.loadingText}>Loading images...</p>
+            ) : gridImages.length === 0 ? (
+              <div style={styles.emptyState}>
+                <p>No grid images uploaded yet. Get started by clicking "Add Grid Image" above.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                {[1, 2, 3].map((colIndex) => {
+                  const colImgs = gridImages.filter((img) => img.col_index === colIndex);
+                  return (
+                    <div key={colIndex} style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(212,175,55,0.1)', borderRadius: '12px', padding: '1.5rem' }}>
+                      <h3 style={{ color: '#f9e076', marginBottom: '1rem', borderBottom: '1px solid rgba(212,175,55,0.15)', paddingBottom: '0.5rem' }}>
+                        Column {colIndex} ({colImgs.length} images)
+                      </h3>
+                      {colImgs.length === 0 ? (
+                        <p style={{ color: '#8a7a4f', fontSize: '0.9rem', fontStyle: 'italic' }}>No images in this column.</p>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1.5rem' }}>
+                          {colImgs.map((img) => (
+                            <div key={img.id} style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                              <img src={img.image_url} alt="Grid" style={{ width: '100%', height: '140px', objectFit: 'cover' }} />
+                              <div style={{ padding: '0.8rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, justifyContent: 'space-between' }}>
+                                <div style={{ fontSize: '0.85rem', color: '#b8a265' }}>
+                                  Order: {img.display_order}
+                                </div>
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                  <button
+                                    onClick={() => startEditGridImage(img)}
+                                    style={{
+                                      ...styles.deleteBtn,
+                                      background: 'rgba(212,175,55,0.1)',
+                                      borderColor: 'rgba(212,175,55,0.3)',
+                                      color: '#f9e076',
+                                      flex: 1,
+                                      padding: '0.3rem',
+                                    }}
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => deleteGridImage(img.id)}
+                                    style={{ ...styles.deleteBtn, flex: 1, padding: '0.3rem' }}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* GRID IMAGE FORM (ADD/EDIT) */}
+        {activeTab === 'gridImageForm' && (
+          <div>
+            <h2 style={styles.tabTitle}>{editingGridImage ? 'Edit Grid Image' : 'Add Grid Image'}</h2>
+            <p style={styles.tabSubtitle}>
+              {editingGridImage ? 'Update this grid image\'s configuration.' : 'Upload a new image for the 3D animated grid.'}
+            </p>
+
+            <form onSubmit={handleGridSave} style={styles.uploadForm}>
+              <div style={styles.uploadField}>
+                <label style={styles.uploadLabel}>Column Assignment *</label>
+                <select
+                  value={gridColIndex}
+                  onChange={(e) => setGridColIndex(e.target.value)}
+                  style={styles.uploadInput}
+                >
+                  <option value="1">Column 1 (Left column, moves up/down)</option>
+                  <option value="2">Column 2 (Center column, moves down/up)</option>
+                  <option value="3">Column 3 (Right column, moves up/down)</option>
+                </select>
+              </div>
+
+              <div style={styles.uploadField}>
+                <label style={styles.uploadLabel}>Display Order</label>
+                <input
+                  type="number"
+                  value={gridOrder}
+                  onChange={(e) => setGridOrder(e.target.value)}
+                  placeholder="e.g., 1 (leave blank for default)"
+                  style={styles.uploadInput}
+                />
+              </div>
+
+              <div style={styles.uploadField}>
+                <label style={styles.uploadLabel}>
+                  {editingGridImage ? 'Replace Image' : 'Select Image *'}
+                </label>
+
+                {editingGridImage && (
+                  <div style={{ marginBottom: '1.2rem', display: 'flex', alignItems: 'center', gap: '1.5rem', background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(212,175,55,0.15)' }}>
+                    <img src={editingGridImage.image_url} alt="Current" style={{ width: '80px', height: '60px', objectFit: 'cover', borderRadius: '6px' }} />
+                    <span style={{ fontSize: '0.85rem', color: '#b8a265' }}>Current Image Preview</span>
+                  </div>
+                )}
+
+                <div style={styles.fileDropZone}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setGridFile(e.target.files[0])}
+                    style={styles.fileInput}
+                    id="grid-image-file-input"
+                    required={!editingGridImage}
+                  />
+                  <label htmlFor="grid-image-file-input" style={styles.fileLabel}>
+                    {gridFile ? (
+                      <>
+                        <span style={{ color: '#d4af37' }}>✓ {gridFile.name}</span>
+                        <br />
+                        <span style={{ fontSize: '0.85rem', opacity: 0.7 }}>
+                          {(gridFile.size / (1024 * 1024)).toFixed(2)} MB
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: '1.5rem' }}>📷</span>
+                        <br />
+                        Click to select image file
+                      </>
+                    )}
+                  </label>
+                </div>
+              </div>
+
+              {gridProgress && (
+                <p style={{
+                  ...styles.uploadStatus,
+                  color: gridProgress.startsWith('Error') ? '#ff4444' : '#d4af37',
+                }}>
+                  {gridProgress}
+                </p>
+              )}
+
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+                <button
+                  type="submit"
+                  disabled={savingGrid}
+                  style={{
+                    ...styles.uploadBtn,
+                    flex: 2,
+                    opacity: savingGrid ? 0.6 : 1,
+                  }}
+                >
+                  {savingGrid ? '⏳ Saving...' : editingGridImage ? 'Update Image' : 'Upload Image'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetGridForm();
+                    setActiveTab('gridImages');
+                  }}
+                  style={{
+                    ...styles.logoutBtn,
+                    flex: 1,
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(212,175,55,0.2)',
+                    color: '#d4c7a2',
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* ELITE INSTITUTIONS TAB */}
+        {activeTab === 'institutions' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h2 style={styles.tabTitle}>Elite Institutions</h2>
+                <p style={styles.tabSubtitle}>
+                  Manage the names of elite institutions displayed on the Specialized page section.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  resetInstitutionForm();
+                  setActiveTab('institutionForm');
+                }}
+                style={styles.addServiceBtn}
+              >
+                ✚ Add Institution Name
+              </button>
+            </div>
+
+            {loadingInstitutions ? (
+              <p style={styles.loadingText}>Loading institutions...</p>
+            ) : adminInstitutions.length === 0 ? (
+              <div style={styles.emptyState}>
+                <p>No institutions found. Click "Add Institution Name" to get started.</p>
+              </div>
+            ) : (
+              <div style={styles.tableWrapper}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr>
+                      <th style={styles.th}>Name</th>
+                      <th style={styles.th}>Display Order</th>
+                      <th style={{ ...styles.th, textAlign: 'right', paddingRight: '2rem' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adminInstitutions.map((inst) => (
+                      <tr key={inst.id} style={styles.tr}>
+                        <td style={styles.td}>{inst.name}</td>
+                        <td style={styles.td}>{inst.display_order}</td>
+                        <td style={{ ...styles.td, textAlign: 'right', paddingRight: '2rem' }}>
+                          <button
+                            onClick={() => startEditInstitution(inst)}
+                            style={{
+                              ...styles.deleteBtn,
+                              background: 'rgba(212,175,55,0.1)',
+                              borderColor: 'rgba(212,175,55,0.3)',
+                              color: '#f9e076',
+                              marginRight: '0.8rem',
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deleteInstitution(inst.id)}
+                            style={styles.deleteBtn}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* INSTITUTION FORM (ADD/EDIT) */}
+        {activeTab === 'institutionForm' && (
+          <div>
+            <h2 style={styles.tabTitle}>{editingInstitution ? 'Edit Institution' : 'Add Institution'}</h2>
+            <p style={styles.tabSubtitle}>
+              {editingInstitution ? 'Update the name or sorting weight of this institution.' : 'Create a new institution entry for the specialized page section.'}
+            </p>
+
+            <form onSubmit={handleInstitutionSave} style={styles.uploadForm}>
+              <div style={styles.uploadField}>
+                <label style={styles.uploadLabel}>Institution Name *</label>
+                <input
+                  type="text"
+                  value={institutionName}
+                  onChange={(e) => setInstitutionName(e.target.value)}
+                  required
+                  placeholder="e.g., KSR INSTITUTION"
+                  style={styles.uploadInput}
+                />
+              </div>
+
+              <div style={styles.uploadField}>
+                <label style={styles.uploadLabel}>Display Order</label>
+                <input
+                  type="number"
+                  value={institutionOrder}
+                  onChange={(e) => setInstitutionOrder(e.target.value)}
+                  placeholder="e.g., 1 (determines sorting order)"
+                  style={styles.uploadInput}
+                />
+              </div>
+
+              {institutionProgress && (
+                <p style={{
+                  ...styles.uploadStatus,
+                  color: institutionProgress.startsWith('Error') ? '#ff4444' : '#d4af37',
+                }}>
+                  {institutionProgress}
+                </p>
+              )}
+
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+                <button
+                  type="submit"
+                  disabled={savingInstitution}
+                  style={{
+                    ...styles.uploadBtn,
+                    flex: 2,
+                    opacity: savingInstitution ? 0.6 : 1,
+                  }}
+                >
+                  {savingInstitution ? '⏳ Saving...' : editingInstitution ? 'Update' : 'Create'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetInstitutionForm();
+                    setActiveTab('institutions');
+                  }}
+                  style={{
+                    ...styles.logoutBtn,
+                    flex: 1,
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(212,175,55,0.2)',
+                    color: '#d4c7a2',
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       </main>
     </div>
   );
@@ -939,14 +2187,16 @@ const styles = {
     padding: '1rem',
   },
   loginCard: {
-    background: 'rgba(20, 17, 10, 0.95)',
-    border: '1px solid rgba(212, 175, 55, 0.3)',
+    background: '#14110a', // Solid, high-opacity dark gold background
+    border: '2px solid #d4af37', // More prominent gold border
     borderRadius: '16px',
     padding: '3rem 2.5rem',
     maxWidth: '420px',
     width: '100%',
-    boxShadow: '0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(212,175,55,0.08)',
+    boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 50px rgba(212,175,55,0.2)',
     textAlign: 'center',
+    opacity: 1, // Explicit opacity 1
+    zIndex: 10,
   },
   loginGoldLine: {
     height: '2px',
@@ -962,7 +2212,7 @@ const styles = {
     margin: 0,
   },
   loginSubtitle: {
-    color: '#b8a265',
+    color: '#d4c7a2',
     fontSize: '0.95rem',
     marginTop: '0.5rem',
     letterSpacing: '1px',
@@ -976,21 +2226,22 @@ const styles = {
   },
   loginLabel: {
     display: 'block',
-    color: '#d4c7a2',
-    fontSize: '0.85rem',
+    color: '#f9e076', // Highly visible gold color
+    fontSize: '0.9rem',
     marginBottom: '0.4rem',
     letterSpacing: '0.5px',
+    fontWeight: '600',
   },
   loginInput: {
     width: '100%',
     padding: '0.8rem 1rem',
-    background: 'rgba(255,255,255,0.05)',
-    border: '1px solid rgba(212,175,55,0.25)',
+    background: 'rgba(255,255,255,0.12)', // Lighter background for better contrast
+    border: '1.5px solid rgba(212,175,55,0.6)', // Brighter border
     borderRadius: '8px',
-    color: '#fff',
+    color: '#fff', // Clear white text
     fontSize: '1rem',
     outline: 'none',
-    transition: 'border-color 0.3s',
+    transition: 'all 0.3s',
     boxSizing: 'border-box',
   },
   loginError: {

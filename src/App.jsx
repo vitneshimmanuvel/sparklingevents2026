@@ -11,16 +11,20 @@ import SuccessStory from './components/SuccessStory';
 import ContactForm from './components/ContactForm';
 import VideoDisplay from './components/VideoDisplay';
 import AdminPortal from './components/AdminPortal';
+import ImageSlideshow from './components/ImageSlideshow';
+import Testimonials from './components/Testimonials';
 
-// Main website pageeee
+// Main website pageeeeee
 function HomePage() {
   return (
     <>
       <Myhero/>
+      <ImageSlideshow/>
       <Sectiontwo/>
       <Secthree/>
       <EliteInstitutions/>
       <SuccessStory/>
+      <Testimonials/>
       <Secfour/>
       <VideoDisplay/>
       <ContactForm/>
@@ -29,12 +33,17 @@ function HomePage() {
   );
 }
 
+import { Analytics } from '@vercel/analytics/react';
+
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<HomePage />} />
-      <Route path="/admin" element={<AdminPortal />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/admin" element={<AdminPortal />} />
+      </Routes>
+      <Analytics />
+    </>
   )
 }
 
