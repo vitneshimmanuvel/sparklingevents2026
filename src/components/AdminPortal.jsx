@@ -3,6 +3,46 @@ import gsap from 'gsap';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
+// Helper for direct client-side uploading to Cloudinary using signed parameters from backend
+const uploadFileToCloudinary = async (file, folder, resourceType, token) => {
+  // 1. Fetch signed parameters from backend
+  const signRes = await fetch(`${API_URL}/api/admin/cloudinary-sign?folder=${folder}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!signRes.ok) {
+    const errText = await signRes.text();
+    throw new Error(`Failed to get upload signature: ${errText}`);
+  }
+  const signData = await signRes.json();
+  const { signature, timestamp, api_key, cloud_name } = signData;
+
+  // 2. Build FormData for Cloudinary
+  const uploadData = new FormData();
+  uploadData.append('file', file);
+  uploadData.append('api_key', api_key);
+  uploadData.append('timestamp', timestamp);
+  uploadData.append('signature', signature);
+  uploadData.append('folder', folder);
+
+  // 3. Upload directly to Cloudinary
+  const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${cloud_name}/${resourceType}/upload`;
+  const uploadRes = await fetch(cloudinaryUrl, {
+    method: 'POST',
+    body: uploadData
+  });
+
+  if (!uploadRes.ok) {
+    const errData = await uploadRes.json();
+    throw new Error(errData.error?.message || 'Direct upload to Cloudinary failed');
+  }
+
+  const uploadResult = await uploadRes.json();
+  return {
+    secure_url: uploadResult.secure_url,
+    public_id: uploadResult.public_id
+  };
+};
+
 // ========================
 // LOGIN COMPONENT
 // ========================
@@ -290,17 +330,31 @@ const AdminDashboard = ({ token, onLogout }) => {
     if (!videoFile || !videoTitle) return;
 
     setUploading(true);
-    setUploadProgress('Uploading to Cloudinary...');
-
-    const formData = new FormData();
-    formData.append('video', videoFile);
-    formData.append('title', videoTitle);
+    setUploadProgress('Uploading video directly to Cloudinary...');
 
     try {
+      // 1. Upload video directly to Cloudinary
+      const { secure_url, public_id } = await uploadFileToCloudinary(
+        videoFile,
+        'sparkling_events',
+        'video',
+        token
+      );
+
+      setUploadProgress('Saving video metadata to database...');
+
+      // 2. Send metadata to our backend
       const res = await fetch(`${API_URL}/api/admin/videos`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: videoTitle,
+          video_url: secure_url,
+          public_id: public_id,
+        }),
       });
 
       const data = await res.json();
@@ -314,7 +368,8 @@ const AdminDashboard = ({ token, onLogout }) => {
         setUploadProgress(`Error: ${data.error}`);
       }
     } catch (err) {
-      setUploadProgress('Upload failed. Check your connection.');
+      console.error(err);
+      setUploadProgress(`Upload failed: ${err.message}`);
     } finally {
       setUploading(false);
     }
@@ -328,31 +383,52 @@ const AdminDashboard = ({ token, onLogout }) => {
     setSavingService(true);
     setServiceProgress(editingService ? 'Updating service...' : 'Creating service...');
 
-    const formData = new FormData();
-    formData.append('name', serviceName);
-    formData.append('price', servicePrice);
-    formData.append('description', serviceDesc);
-    formData.append('is_visible', String(serviceVisible));
-
-    if (serviceVideo) {
-      formData.append('video', serviceVideo);
-    }
-
-    if (editingService) {
-      formData.append('remove_video', String(removeVideo));
-    }
-
-    const url = editingService
-      ? `${API_URL}/api/admin/services/${editingService.id}`
-      : `${API_URL}/api/admin/services`;
-
-    const method = editingService ? 'PUT' : 'POST';
-
     try {
+      let uploadedVideoUrl = null;
+      let uploadedPublicId = null;
+
+      // 1. Upload service video if selected
+      if (serviceVideo) {
+        setServiceProgress('Uploading video directly to Cloudinary...');
+        const { secure_url, public_id } = await uploadFileToCloudinary(
+          serviceVideo,
+          'sparkling_events_services',
+          'video',
+          token
+        );
+        uploadedVideoUrl = secure_url;
+        uploadedPublicId = public_id;
+      }
+
+      setServiceProgress('Saving service data to database...');
+
+      const payload = {
+        name: serviceName,
+        price: servicePrice,
+        description: serviceDesc,
+        is_visible: String(serviceVisible),
+        remove_video: String(removeVideo),
+      };
+
+      if (uploadedVideoUrl && uploadedPublicId) {
+        payload.video_url = uploadedVideoUrl;
+        payload.public_id = uploadedPublicId;
+      }
+
+      const url = editingService
+        ? `${API_URL}/api/admin/services/${editingService.id}`
+        : `${API_URL}/api/admin/services`;
+
+      const method = editingService ? 'PUT' : 'POST';
+
+      // 2. Send JSON payload to backend
       const res = await fetch(url, {
         method,
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -366,7 +442,8 @@ const AdminDashboard = ({ token, onLogout }) => {
         setServiceProgress(`Error: ${data.error || 'Failed to save service'}`);
       }
     } catch (err) {
-      setServiceProgress('Saving failed. Check your connection.');
+      console.error(err);
+      setServiceProgress(`Saving failed: ${err.message}`);
     } finally {
       setSavingService(false);
     }
@@ -434,23 +511,51 @@ const AdminDashboard = ({ token, onLogout }) => {
     setSavingSlider(true);
     setSliderProgress(editingSliderImage ? 'Updating image...' : 'Uploading image...');
 
-    const formData = new FormData();
-    formData.append('title', sliderTitle);
-    formData.append('display_order', sliderOrder || '0');
-    formData.append('is_active', String(sliderActive));
-    if (sliderFile) formData.append('image', sliderFile);
-
-    const url = editingSliderImage
-      ? `${API_URL}/api/admin/slider-images/${editingSliderImage.id}`
-      : `${API_URL}/api/admin/slider-images`;
-    const method = editingSliderImage ? 'PUT' : 'POST';
-
     try {
+      let uploadedImageUrl = null;
+      let uploadedPublicId = null;
+
+      // 1. Upload slider image if selected
+      if (sliderFile) {
+        setSliderProgress('Uploading image directly to Cloudinary...');
+        const { secure_url, public_id } = await uploadFileToCloudinary(
+          sliderFile,
+          'sparkling_events_slider',
+          'image',
+          token
+        );
+        uploadedImageUrl = secure_url;
+        uploadedPublicId = public_id;
+      }
+
+      setSliderProgress('Saving slider details to database...');
+
+      const payload = {
+        title: sliderTitle,
+        display_order: sliderOrder || '0',
+        is_active: String(sliderActive),
+      };
+
+      if (uploadedImageUrl && uploadedPublicId) {
+        payload.image_url = uploadedImageUrl;
+        payload.public_id = uploadedPublicId;
+      }
+
+      const url = editingSliderImage
+        ? `${API_URL}/api/admin/slider-images/${editingSliderImage.id}`
+        : `${API_URL}/api/admin/slider-images`;
+      const method = editingSliderImage ? 'PUT' : 'POST';
+
+      // 2. Send JSON payload to backend
       const res = await fetch(url, {
         method,
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
       });
+
       const data = await res.json();
       if (res.ok) {
         setSliderProgress(editingSliderImage ? '✓ Image updated!' : '✓ Image uploaded!');
@@ -462,7 +567,8 @@ const AdminDashboard = ({ token, onLogout }) => {
         setSliderProgress(`Error: ${data.error || 'Failed to save'}`);
       }
     } catch (err) {
-      setSliderProgress('Save failed. Check your connection.');
+      console.error(err);
+      setSliderProgress(`Save failed: ${err.message}`);
     } finally {
       setSavingSlider(false);
     }
@@ -519,26 +625,54 @@ const AdminDashboard = ({ token, onLogout }) => {
     setSavingTestimonial(true);
     setTestimonialProgress(editingTestimonial ? 'Updating testimonial...' : 'Creating testimonial...');
 
-    const formData = new FormData();
-    formData.append('client_name', testimonialName);
-    formData.append('designation', testimonialDesignation);
-    formData.append('message', testimonialMessage);
-    formData.append('rating', testimonialRating);
-    formData.append('is_visible', String(testimonialVisible));
-    if (testimonialFile) formData.append('image', testimonialFile);
-    if (editingTestimonial && removeTestimonialImage) formData.append('remove_image', 'true');
-
-    const url = editingTestimonial
-      ? `${API_URL}/api/admin/testimonials/${editingTestimonial.id}`
-      : `${API_URL}/api/admin/testimonials`;
-    const method = editingTestimonial ? 'PUT' : 'POST';
-
     try {
+      let uploadedImageUrl = null;
+      let uploadedPublicId = null;
+
+      // 1. Upload testimonial image if selected
+      if (testimonialFile) {
+        setTestimonialProgress('Uploading client image directly to Cloudinary...');
+        const { secure_url, public_id } = await uploadFileToCloudinary(
+          testimonialFile,
+          'sparkling_events_testimonials',
+          'image',
+          token
+        );
+        uploadedImageUrl = secure_url;
+        uploadedPublicId = public_id;
+      }
+
+      setTestimonialProgress('Saving testimonial to database...');
+
+      const payload = {
+        client_name: testimonialName,
+        designation: testimonialDesignation,
+        message: testimonialMessage,
+        rating: testimonialRating,
+        is_visible: String(testimonialVisible),
+        remove_image: String(removeTestimonialImage),
+      };
+
+      if (uploadedImageUrl && uploadedPublicId) {
+        payload.image_url = uploadedImageUrl;
+        payload.public_id = uploadedPublicId;
+      }
+
+      const url = editingTestimonial
+        ? `${API_URL}/api/admin/testimonials/${editingTestimonial.id}`
+        : `${API_URL}/api/admin/testimonials`;
+      const method = editingTestimonial ? 'PUT' : 'POST';
+
+      // 2. Send JSON payload to backend
       const res = await fetch(url, {
         method,
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
       });
+
       const data = await res.json();
       if (res.ok) {
         setTestimonialProgress(editingTestimonial ? '✓ Testimonial updated!' : '✓ Testimonial created!');
@@ -550,7 +684,8 @@ const AdminDashboard = ({ token, onLogout }) => {
         setTestimonialProgress(`Error: ${data.error || 'Failed to save'}`);
       }
     } catch (err) {
-      setTestimonialProgress('Save failed. Check your connection.');
+      console.error(err);
+      setTestimonialProgress(`Save failed: ${err.message}`);
     } finally {
       setSavingTestimonial(false);
     }
@@ -613,22 +748,50 @@ const AdminDashboard = ({ token, onLogout }) => {
     setSavingGrid(true);
     setGridProgress(editingGridImage ? 'Updating image...' : 'Uploading image...');
 
-    const formData = new FormData();
-    formData.append('col_index', gridColIndex);
-    formData.append('display_order', gridOrder || '0');
-    if (gridFile) formData.append('image', gridFile);
-
-    const url = editingGridImage
-      ? `${API_URL}/api/admin/grid-images/${editingGridImage.id}`
-      : `${API_URL}/api/admin/grid-images`;
-    const method = editingGridImage ? 'PUT' : 'POST';
-
     try {
+      let uploadedImageUrl = null;
+      let uploadedPublicId = null;
+
+      // 1. Upload grid image if selected
+      if (gridFile) {
+        setGridProgress('Uploading grid image directly to Cloudinary...');
+        const { secure_url, public_id } = await uploadFileToCloudinary(
+          gridFile,
+          'sparkling_events_grid',
+          'image',
+          token
+        );
+        uploadedImageUrl = secure_url;
+        uploadedPublicId = public_id;
+      }
+
+      setGridProgress('Saving grid image details to database...');
+
+      const payload = {
+        col_index: gridColIndex,
+        display_order: gridOrder || '0',
+      };
+
+      if (uploadedImageUrl && uploadedPublicId) {
+        payload.image_url = uploadedImageUrl;
+        payload.public_id = uploadedPublicId;
+      }
+
+      const url = editingGridImage
+        ? `${API_URL}/api/admin/grid-images/${editingGridImage.id}`
+        : `${API_URL}/api/admin/grid-images`;
+      const method = editingGridImage ? 'PUT' : 'POST';
+
+      // 2. Send JSON payload to backend
       const res = await fetch(url, {
         method,
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
       });
+
       const data = await res.json();
       if (res.ok) {
         setGridProgress(editingGridImage ? '✓ Image updated!' : '✓ Image uploaded!');
@@ -640,7 +803,8 @@ const AdminDashboard = ({ token, onLogout }) => {
         setGridProgress(`Error: ${data.error || 'Failed to save'}`);
       }
     } catch (err) {
-      setGridProgress('Save failed. Check your connection.');
+      console.error(err);
+      setGridProgress(`Save failed: ${err.message}`);
     } finally {
       setSavingGrid(false);
     }
